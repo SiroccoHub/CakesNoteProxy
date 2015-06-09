@@ -83,7 +83,10 @@ namespace CakesNoteProxy
 
                 while (gotNotesCount < willGetNotesCount)
                 {
-                    var data = accessor.GetNotesView(currentPage++).data;
+                    var view = accessor.GetNotesView(currentPage++);
+                    if (view==null) break;
+
+                    var data = view.data;
                     gotNotesCount += data.notes.Count;
                     results.AddRange(data.notes);
 

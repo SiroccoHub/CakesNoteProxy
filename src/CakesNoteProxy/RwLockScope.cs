@@ -8,8 +8,6 @@ namespace CakesNoteProxy
         private static readonly object Sync = new object();
         private static volatile ReaderWriterLockSlim _rwLockSlim;
 
-        private readonly RwLockScopes _havingRwLockScopes;
-
         static RwLockScope()
         {
         }
@@ -27,8 +25,6 @@ namespace CakesNoteProxy
                         _rwLockSlim = new ReaderWriterLockSlim();
                     }
                 }
-
-            _havingRwLockScopes = rwLockScopes;
 
             switch (rwLockScopes)
             {
@@ -71,22 +67,14 @@ namespace CakesNoteProxy
 
             if (disposing)
             {
-                switch (_havingRwLockScopes)
-                {
-                    case RwLockScopes.WriteWithUpgradeable:
-                        _rwLockSlim.ExitWriteLock();
-                        _rwLockSlim.ExitUpgradeableReadLock();
-                        break;
-                    case RwLockScopes.Write:
-                        _rwLockSlim.ExitWriteLock();
-                        break;
-                    case RwLockScopes.Upgradeable:
-                        _rwLockSlim.ExitUpgradeableReadLock();
-                        break;
-                    case RwLockScopes.ReadOnly:
-                        _rwLockSlim.ExitReadLock();
-                        break;
-                }
+                if (_rwLockSlim.IsWriteLockHeld)
+                    _rwLockSlim.ExitWriteLock();
+
+                if (_rwLockSlim.IsUpgradeableReadLockHeld)
+                    _rwLockSlim.ExitUpgradeableReadLock();
+
+                if (_rwLockSlim.IsReadLockHeld)
+                    _rwLockSlim.ExitReadLock();;
             }
 
             _disposed = true;

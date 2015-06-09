@@ -40,7 +40,7 @@ namespace CakesNoteProxy.Model
         public bool is_reserved { get; set; }
         public DateTime? reserved_publish_at { get; set; }
         public List<NoteLike> likes { get; set; }
-        public NoteUser NoteUser { get; set; }
+        public NoteUser user { get; set; }
         public List<object> comments { get; set; }
         public List<NoteHashtagNotes> hashtag_notes { get; set; }
         public bool has_coupon { get; set; }

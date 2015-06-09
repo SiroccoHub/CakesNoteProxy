@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net.Http;
 using CakesNoteProxy.Model;
 using Newtonsoft.Json;
@@ -21,16 +22,27 @@ namespace CakesNoteProxy.Accessor
 
         public NoteView GetNotesView(int page = 1, string utlname = null)
         {
-            var result = _httpClient.GetStringAsync(
-                string.Format("{0}{1}/notes?note_intro_only={2}&page={3}&urlname={4}",
-                    NoteProxyConfigure.NoteApi.SiteFqdn,
-                    NoteProxyConfigure.NoteApi.ApiRoot,
-                    false,
-                    page,
-                    utlname ?? NoteProxyConfigure.NoteApi.DefaultUserId))
-                .Result;
+            string result;
+            try
+            {
+                var response = _httpClient.GetAsync(
+                    string.Format("{0}{1}/notes?note_intro_only={2}&page={3}&urlname={4}",
+                        NoteProxyConfigure.NoteApi.SiteFqdn,
+                        NoteProxyConfigure.NoteApi.ApiRoot,
+                        NoteProxyConfigure.NoteApi.IsIntro,
+                        page,
+                        utlname ?? NoteProxyConfigure.NoteApi.UserId)).Result;
 
-            return JsonConvert.DeserializeObject<NoteView>(result);
+                response.EnsureSuccessStatusCode();
+                result = response.Content.ReadAsStringAsync().Result;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning("fire Exception at GetNotesView()");
+                Trace.TraceWarning("ex=\r\n{0}", ex);
+                result = null;
+            }
+            return (result != null) ? JsonConvert.DeserializeObject<NoteView>(result) : null;
         }
 
 

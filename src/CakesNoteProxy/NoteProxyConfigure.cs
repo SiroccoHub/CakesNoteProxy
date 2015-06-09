@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 
 namespace CakesNoteProxy
 {
@@ -8,11 +9,15 @@ namespace CakesNoteProxy
         {
             public static string SiteFqdn { get; private set; }
 
-            public static string DefaultUserId { get; private set; }
+            public static string UserId { get; private set; }
+
+            public static bool IsIntro { get; private set; }
+
             static NoteApi()
             {
                 SiteFqdn = "https://note.mu";
-                DefaultUserId = "info";
+                UserId = "info";
+                IsIntro = true;
             }
 
             public static void SetGlobal(string noteSiteFqdn)
@@ -21,10 +26,11 @@ namespace CakesNoteProxy
                     SiteFqdn = noteSiteFqdn;
             }
 
-            public static void SetMyNote(string noteDefautUserId)
+            public static void SetMyNote(string noteUserId, bool isIntro)
             {
-                if (noteDefautUserId != null)
-                    DefaultUserId = noteDefautUserId;
+                if (noteUserId != null)
+                    UserId = noteUserId;
+                IsIntro = isIntro;
             }
 
             public static readonly string ApiRoot = "/api/v1";
