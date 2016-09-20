@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Net.Http;
+using System.Threading.Tasks;
 using CakesNoteProxy.Model;
 using Newtonsoft.Json;
 
@@ -20,18 +21,13 @@ namespace CakesNoteProxy.Accessor
             _httpClient = new HttpClient(httpMessageHandler);
         }
 
-        public NoteView GetNotesView(int page = 1, string utlname = null)
+        public async Task<NoteView> GetNotesViewAsync(int page = 1, string utlname = null)
         {
             string result;
             try
             {
-                var response = _httpClient.GetAsync(
-                    string.Format("{0}{1}/notes?note_intro_only={2}&page={3}&urlname={4}",
-                        NoteProxyConfigure.NoteApi.SiteFqdn,
-                        NoteProxyConfigure.NoteApi.ApiRoot,
-                        NoteProxyConfigure.NoteApi.IsIntro,
-                        page,
-                        utlname ?? NoteProxyConfigure.NoteApi.UserId)).Result;
+                var response = await _httpClient.GetAsync(
+                    $"{NoteProxyConfigure.NoteApi.SiteFqdn}{NoteProxyConfigure.NoteApi.ApiRoot}/notes?note_intro_only={NoteProxyConfigure.NoteApi.IsIntro}&page={page}&urlname={utlname ?? NoteProxyConfigure.NoteApi.UserId}");
 
                 response.EnsureSuccessStatusCode();
                 result = response.Content.ReadAsStringAsync().Result;
@@ -60,7 +56,7 @@ namespace CakesNoteProxy.Accessor
 
             if (disposing)
             {
-                if (_httpClient!=null) _httpClient.Dispose();
+                _httpClient?.Dispose();
             }
 
             _disposed = true;

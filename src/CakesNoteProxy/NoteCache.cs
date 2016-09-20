@@ -20,7 +20,7 @@ namespace CakesNoteProxy
         public Predicate<DateTime> RefreshCacheSpeculativeExecutionPredicate;
         private volatile bool _executeMonitoringThread = true;
 
-        public Func<int, List<NoteContent>> RefreshCacheExecute;
+        public Func<int, Task<List<NoteContent>>> RefreshCacheExecute;
 
         public TimeSpan MonitoringThreadInterval;
 
@@ -107,7 +107,7 @@ namespace CakesNoteProxy
         /// <summary>
         /// Refresh cache called from internal
         /// </summary>
-        private void RefreshCache(bool useNewThread = false)
+        private async void RefreshCache(bool useNewThread = false)
         {
             Trace.TraceInformation("calling RefreshCache({0})", useNewThread);
 
@@ -115,27 +115,27 @@ namespace CakesNoteProxy
 
             if (!useNewThread)
             {
-                AddRange(RefreshCacheExecute(_contents.Count));
+                AddRange(await RefreshCacheExecute(_contents.Count));
                 Trace.TraceInformation("called RefreshCache(False)");
             }
             else
             {
-                Task.Factory.StartNew(() =>
-                {
-                    try
-                    {
-                        AddRange(RefreshCacheExecute(_contents.Count));
-                    }
-                    catch (Exception ex)
-                    {
-                        Trace.TraceWarning("fire Exception at RefreshCache() another threads.");
-                        Trace.TraceWarning("ex=\r\n{0}", ex);
-                    }
-                    finally
-                    {
-                        Trace.TraceInformation("called RefreshCache(True)");
-                    }
-                }).ConfigureAwait(false);
+                await Task.Factory.StartNew(async () =>
+                 {
+                     try
+                     {
+                         AddRange(await RefreshCacheExecute(_contents.Count));
+                     }
+                     catch (Exception ex)
+                     {
+                         Trace.TraceWarning("fire Exception at RefreshCache() another threads.");
+                         Trace.TraceWarning("ex=\r\n{0}", ex);
+                     }
+                     finally
+                     {
+                         Trace.TraceInformation("called RefreshCache(True)");
+                     }
+                 }).ConfigureAwait(false);
             }
         }
 

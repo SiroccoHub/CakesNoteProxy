@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using CakesNoteProxy.Accessor;
 using CakesNoteProxy.Model;
 
@@ -35,9 +36,9 @@ namespace CakesNoteProxy
                         _cachedInstance = new NoteCache();
 
                     // deligation refleshing cache
-                    _cachedInstance.RefreshCacheExecute = (contentCount) =>
+                    _cachedInstance.RefreshCacheExecute = async (contentCount) =>
                     {
-                        var results = CallApiAndAdd(contentCount);
+                        var results = await CallApiAndAddAsync(contentCount);
                         return results.OrderByDescending(p => p.publish_at).ToList();
                     };
                 }
@@ -50,10 +51,10 @@ namespace CakesNoteProxy
         /// </summary>
         /// <param name="willGetNotesCount"></param>
         /// <returns></returns>
-        public static IEnumerable<NoteContent> GetNotesTimeline(int willGetNotesCount = 10)
+        public static async Task<IEnumerable<NoteContent>> GetNotesTimeline(int willGetNotesCount = 10)
         {
             if (_cachedInstance.GetAll().Count < willGetNotesCount)
-                GetNotesCurrentTimeline(willGetNotesCount);
+                await GetNotesCurrentTimeline(willGetNotesCount);
 
             return _cachedInstance.GetAll().OrderByDescending(p => p.publish_at).Take(willGetNotesCount).ToList();
         }
@@ -63,9 +64,9 @@ namespace CakesNoteProxy
         /// </summary>
         /// <param name="willGetNotesCount"></param>
         /// <returns></returns>
-        public static IEnumerable<NoteContent> GetNotesCurrentTimeline(int willGetNotesCount = 10)
+        public static async Task<IEnumerable<NoteContent>> GetNotesCurrentTimeline(int willGetNotesCount = 10)
         {
-            _cachedInstance.AddRange(CallApiAndAdd(willGetNotesCount));
+            _cachedInstance.AddRange(await CallApiAndAddAsync(willGetNotesCount));
             return _cachedInstance.GetAll().OrderByDescending(p => p.publish_at).ToList();
         }
 
@@ -73,7 +74,7 @@ namespace CakesNoteProxy
         /// Get and Put Data from Calling Api
         /// </summary>
         /// <param name="willGetNotesCount"></param>
-        private static List<NoteContent> CallApiAndAdd(int willGetNotesCount)
+        private static async Task<List<NoteContent>> CallApiAndAddAsync(int willGetNotesCount)
         {
             var results = new List<NoteContent>();
             using (var accessor = new NoteApiAccessor())
@@ -83,8 +84,8 @@ namespace CakesNoteProxy
 
                 while (gotNotesCount < willGetNotesCount)
                 {
-                    var view = accessor.GetNotesView(currentPage++);
-                    if (view==null) break;
+                    var view = await accessor.GetNotesViewAsync(currentPage++);
+                    if (view == null) break;
 
                     var data = view.data;
                     gotNotesCount += data.notes.Count;
