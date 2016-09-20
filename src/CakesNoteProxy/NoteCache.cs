@@ -5,11 +5,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CakesNoteProxy.Model;
+using Microsoft.Extensions.Logging;
 
 namespace CakesNoteProxy
 {
     public class NoteCache : IDisposable
     {
+        private readonly ILogger _logger;
+
         private readonly List<NoteContent> _contents;
         public DateTime ModifiedDateTimeUtc { get; private set; }
 
@@ -26,8 +29,11 @@ namespace CakesNoteProxy
 
         public int CachedItemsCountHardLimit;
 
-        public NoteCache()
+        private bool DoRefreshing { get; set; }
+
+        public NoteCache(ILoggerFactory loggerFactory)
         {
+            _logger = loggerFactory.CreateLogger<NoteCache>();
             _contents = new List<NoteContent>();
 
             CacheLifecycleTimeSpan = NoteProxyConfigure.NoteCache.CacheLifecycleTimeSpan;
@@ -40,7 +46,7 @@ namespace CakesNoteProxy
             {
                 var targetDt = ModifiedDateTimeUtc.Add(CacheLifecycleTimeSpan);
 
-                Trace.TraceInformation("calling delegate RefreshCachePredicate(),{0},{1}", targetDt, currentDateTime);
+                _logger.LogInformation($"calling delegate RefreshCachePredicate(),{targetDt},{currentDateTime}");
                 return (targetDt < currentDateTime);
             };
 
@@ -49,20 +55,22 @@ namespace CakesNoteProxy
                 var targetDt = ModifiedDateTimeUtc.Add(
                     new TimeSpan((long)(CacheLifecycleTimeSpan.Ticks * CacheLifecycleSpeculativeExecutionRate)));
 
-                Trace.TraceInformation("calling delegate RefreshCacheSpeculativeExecutionPredicate(),{0},{1}", targetDt, currentDateTime);
+                _logger.LogInformation($"calling delegate RefreshCacheSpeculativeExecutionPredicate(),{targetDt},{currentDateTime}");
                 return (targetDt < currentDateTime);
             };
 
-            ModifiedDateTimeUtc = DateTime.UtcNow;
+            ModifiedDateTimeUtc = DateTime.MinValue;
 
             // monitoring thread.
-            Task.Factory.StartNew(() =>
+            Task.Factory.StartNew(async () =>
             {
                 while (_executeMonitoringThread)
                 {
-                    Trace.TraceInformation("calling ()monitoring. _executeMonitoringThread={0},interval={1}", _executeMonitoringThread, MonitoringThreadInterval);
-                    if (RefreshCacheSpeculativeExecutionPredicate(DateTime.UtcNow))  RefreshCache(true);
-                    Thread.Sleep(MonitoringThreadInterval);
+                    await Task.Delay(MonitoringThreadInterval);
+
+                    _logger.LogInformation($"calling ()monitoring. _executeMonitoringThread={ _executeMonitoringThread},interval={MonitoringThreadInterval}");
+                    if (RefreshCacheSpeculativeExecutionPredicate(DateTime.UtcNow))
+                        await RefreshCacheAsync(true);
                 }
             }).ConfigureAwait(false);
         }
@@ -73,7 +81,7 @@ namespace CakesNoteProxy
         /// <param name="addList"></param>
         public void AddRange(ICollection<NoteContent> addList)
         {
-            Trace.TraceInformation("calling AddRange()");
+            _logger.LogInformation("calling AddRange()");
 
             using (new RwLockScope(RwLockScopes.Upgradeable))
             {
@@ -87,7 +95,7 @@ namespace CakesNoteProxy
         /// <param name="addList"></param>
         private void AddRangeInternal(ICollection<NoteContent> addList)
         {
-            Trace.TraceInformation("calling AddRangeInternal()");
+            _logger.LogInformation("calling AddRangeInternal()");
 
             using (new RwLockScope(RwLockScopes.Write))
             {
@@ -96,7 +104,7 @@ namespace CakesNoteProxy
 
                 if (_contents.Count > CachedItemsCountHardLimit)
                 {
-                    Trace.TraceWarning("fire CachedItemsCountHardLimit,{0},{1},will delete", _contents.Count,CachedItemsCountHardLimit);
+                    _logger.LogWarning($"fire CachedItemsCountHardLimit,{_contents.Count},{CachedItemsCountHardLimit},will delete");
                     _contents.RemoveRange(CachedItemsCountHardLimit, _contents.Count - CachedItemsCountHardLimit);
                 }
 
@@ -107,16 +115,25 @@ namespace CakesNoteProxy
         /// <summary>
         /// Refresh cache called from internal
         /// </summary>
-        private async void RefreshCache(bool useNewThread = false)
+        private async Task RefreshCacheAsync(bool useNewThread = false)
         {
-            Trace.TraceInformation("calling RefreshCache({0})", useNewThread);
+            _logger.LogInformation($"calling RefreshCache({useNewThread})");
 
-            if (RefreshCacheExecute == null) return;
+            if (RefreshCacheExecute == null)
+                return;
+
+            if (DoRefreshing)
+            {
+                _logger.LogInformation($"doRefreshing. void return.");
+                return;
+            }
+
+            DoRefreshing = true; // lose lock
 
             if (!useNewThread)
             {
                 AddRange(await RefreshCacheExecute(_contents.Count));
-                Trace.TraceInformation("called RefreshCache(False)");
+                _logger.LogInformation("called RefreshCache(False)");
             }
             else
             {
@@ -128,31 +145,36 @@ namespace CakesNoteProxy
                      }
                      catch (Exception ex)
                      {
-                         Trace.TraceWarning("fire Exception at RefreshCache() another threads.");
-                         Trace.TraceWarning("ex=\r\n{0}", ex);
+                         _logger.LogWarning("fire Exception at RefreshCache() another threads.");
+                         _logger.LogWarning($"ex=\r\n{ex}");
                      }
                      finally
                      {
-                         Trace.TraceInformation("called RefreshCache(True)");
+                         _logger.LogInformation("called RefreshCache(True)");
                      }
                  }).ConfigureAwait(false);
             }
+
+            DoRefreshing = false;
         }
 
         /// <summary>
         /// Get all Contents
         /// </summary>
         /// <returns></returns>
-        public IList<NoteContent> GetAll()
+        public async Task<IEnumerable<NoteContent>> GetAllAsync()
         {
-            Trace.TraceInformation("calling GetAll()");
+            _logger.LogInformation("calling GetAll()");
 
             // if cache has expired, calling Refresh.
-            if (RefreshCachePredicate(DateTime.UtcNow)) RefreshCache();
+            if (RefreshCachePredicate(DateTime.UtcNow))
+            {
+                await RefreshCacheAsync(ModifiedDateTimeUtc != DateTime.MinValue);
+            }
 
             using (new RwLockScope())
             {
-                return _contents.ToList();
+                return _contents;
             }
         }
 

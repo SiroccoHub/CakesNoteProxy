@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Net;
+using Microsoft.Extensions.Logging;
 
 namespace CakesNoteProxy
 {
     public static class NoteProxyConfigure
     {
+        public static ILoggerFactory LoggerFactory;
+
         public static class NoteApi
         {
             public static string SiteFqdn { get; private set; }

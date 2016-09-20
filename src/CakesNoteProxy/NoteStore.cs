@@ -1,29 +1,49 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using CakesNoteProxy.Accessor;
 using CakesNoteProxy.Model;
+using Microsoft.Extensions.Logging;
 
 namespace CakesNoteProxy
 {
-    public class NoteStore
+    public class NoteStore : IDisposable
     {
+        private readonly ILogger _logger;
+        private static ILoggerFactory _loggerFactory;
+
         private static readonly object Sync = new object();
 
-        private volatile static NoteCache _cachedInstance;
+        private static volatile NoteCache _cachedInstance;
 
-        static NoteStore()
-        {
-            var cachedInstance = NoteStore.CachedInstance;
-        }
+        private const int DefaultContentCount = 10;
 
         public NoteStore()
         {
-            var cachedInstance = NoteStore.CachedInstance;
+            _loggerFactory = NoteProxyConfigure.LoggerFactory;
+
+            if (NoteProxyConfigure.LoggerFactory == null)
+                throw new ArgumentNullException(nameof(NoteProxyConfigure.LoggerFactory));
+
+            _logger = NoteProxyConfigure.LoggerFactory.CreateLogger<NoteStore>();
+
+            var cachedInstance = CachedInstance;
         }
 
-        public static NoteCache CachedInstance
+        public NoteStore(ILoggerFactory loggerFactory)
+        {
+            _loggerFactory = loggerFactory ?? NoteProxyConfigure.LoggerFactory;
+
+            if (_loggerFactory == null)
+                throw new ArgumentNullException(nameof(loggerFactory));
+
+            _logger = loggerFactory.CreateLogger<NoteStore>();
+            var cachedInstance = CachedInstance;
+        }
+
+        public NoteCache CachedInstance
         {
             get
             {
@@ -33,12 +53,16 @@ namespace CakesNoteProxy
                 {
                     // instanced
                     if (_cachedInstance == null)
-                        _cachedInstance = new NoteCache();
+                        _cachedInstance = new NoteCache(_loggerFactory);
 
                     // deligation refleshing cache
-                    _cachedInstance.RefreshCacheExecute = async (contentCount) =>
+                    _cachedInstance.RefreshCacheExecute = async (currentContentCount) =>
                     {
-                        var results = await CallApiAndAddAsync(contentCount);
+                        var refreshContentCount = currentContentCount == 0
+                            ? DefaultContentCount
+                            : currentContentCount;
+
+                        var results = await CallApiAndAddAsync(refreshContentCount);
                         return results.OrderByDescending(p => p.publish_at).ToList();
                     };
                 }
@@ -51,12 +75,9 @@ namespace CakesNoteProxy
         /// </summary>
         /// <param name="willGetNotesCount"></param>
         /// <returns></returns>
-        public static async Task<IEnumerable<NoteContent>> GetNotesTimeline(int willGetNotesCount = 10)
+        public async Task<IEnumerable<NoteContent>> GetNotesTimelineAsync(int willGetNotesCount = DefaultContentCount)
         {
-            if (_cachedInstance.GetAll().Count < willGetNotesCount)
-                await GetNotesCurrentTimeline(willGetNotesCount);
-
-            return _cachedInstance.GetAll().OrderByDescending(p => p.publish_at).Take(willGetNotesCount).ToList();
+            return (await CachedInstance.GetAllAsync()).OrderByDescending(p => p.publish_at).Take(willGetNotesCount);
         }
 
         /// <summary>
@@ -64,20 +85,20 @@ namespace CakesNoteProxy
         /// </summary>
         /// <param name="willGetNotesCount"></param>
         /// <returns></returns>
-        public static async Task<IEnumerable<NoteContent>> GetNotesCurrentTimeline(int willGetNotesCount = 10)
+        public async Task<IEnumerable<NoteContent>> GetNotesCurrentTimelineAsync(int willGetNotesCount = DefaultContentCount)
         {
-            _cachedInstance.AddRange(await CallApiAndAddAsync(willGetNotesCount));
-            return _cachedInstance.GetAll().OrderByDescending(p => p.publish_at).ToList();
+            CachedInstance.AddRange(await CallApiAndAddAsync(willGetNotesCount));
+            return (await CachedInstance.GetAllAsync()).OrderByDescending(p => p.publish_at);
         }
 
         /// <summary>
         /// Get and Put Data from Calling Api
         /// </summary>
         /// <param name="willGetNotesCount"></param>
-        private static async Task<List<NoteContent>> CallApiAndAddAsync(int willGetNotesCount)
+        private async Task<List<NoteContent>> CallApiAndAddAsync(int willGetNotesCount)
         {
             var results = new List<NoteContent>();
-            using (var accessor = new NoteApiAccessor())
+            using (var accessor = new NoteApiAccessor(_loggerFactory))
             {
                 var gotNotesCount = 0;
                 var currentPage = 1;
@@ -91,12 +112,49 @@ namespace CakesNoteProxy
                     gotNotesCount += data.notes.Count;
                     results.AddRange(data.notes);
 
-                    Trace.TraceInformation("calling CallApiAndAdd,{0},{1},{2},{3},{4}", willGetNotesCount, gotNotesCount, currentPage - 1, data.next_page.HasValue, data.last_page);
-                    
+                    _logger.LogInformation($"calling CallApiAndAdd,{0},{1},{2},{3},{4}", willGetNotesCount, gotNotesCount,
+                        currentPage - 1, data.next_page.HasValue, data.last_page);
+
                     if (data.next_page.HasValue == false || data.last_page) break;
                 }
             }
             return results;
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // 重複する呼び出しを検出するには
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: マネージ状態を破棄します (マネージ オブジェクト)。
+                }
+
+                // TODO: アンマネージ リソース (アンマネージ オブジェクト) を解放し、下のファイナライザーをオーバーライドします。
+                // TODO: 大きなフィールドを null に設定します。
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: 上の Dispose(bool disposing) にアンマネージ リソースを解放するコードが含まれる場合にのみ、ファイナライザーをオーバーライドします。
+        // ~NoteStore() {
+        //   // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+        //   Dispose(false);
+        // }
+
+        // このコードは、破棄可能なパターンを正しく実装できるように追加されました。
+        void IDisposable.Dispose()
+        {
+            // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+            Dispose(true);
+            // TODO: 上のファイナライザーがオーバーライドされる場合は、次の行のコメントを解除してください。
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
+
     }
 }
