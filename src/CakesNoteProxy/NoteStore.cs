@@ -112,8 +112,7 @@ namespace CakesNoteProxy
                     gotNotesCount += data.notes.Count;
                     results.AddRange(data.notes);
 
-                    _logger.LogInformation($"calling CallApiAndAdd,{0},{1},{2},{3},{4}", willGetNotesCount, gotNotesCount,
-                        currentPage - 1, data.next_page.HasValue, data.last_page);
+                    _logger.LogInformation($"calling CallApiAndAdd,willGetNotesCount={willGetNotesCount},gotNotesCount={gotNotesCount},currentPage={currentPage},data.next_page.HasValue={data.next_page.HasValue},{data.next_page.HasValue},data.last_page={data.last_page}");
 
                     if (data.next_page.HasValue == false || data.last_page) break;
                 }
