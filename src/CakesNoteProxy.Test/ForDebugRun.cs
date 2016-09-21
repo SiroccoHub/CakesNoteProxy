@@ -25,10 +25,11 @@ namespace CakesNoteProxy.Test
         public async Task GetCachedNotes()
         {
             var sw = new Stopwatch();
-            sw.Restart();
 
             using (var x = new NoteStore(ApplicationLogging.LoggerFactory))
             {
+                sw.Restart();
+
                 var noteContent = (await x.GetNotesTimelineAsync(5)).ToList();
                 Assert.True(noteContent.Any());
 
@@ -91,6 +92,34 @@ namespace CakesNoteProxy.Test
                 sw.Restart();
 
                 noteContent = (await x.GetNotesTimelineAsync(10)).ToList();
+                Assert.True(noteContent.Any());
+                Assert.True(sw.ElapsedMilliseconds < 10);
+
+                Debug.WriteLine("Elapsed: {0} ms", sw.ElapsedMilliseconds);
+                Debug.WriteLine("noteContent.Count()={0}", noteContent.Count());
+                foreach (var content in noteContent)
+                {
+                    Debug.WriteLine(content);
+                }
+            }
+
+            using (var x = new NoteStore(ApplicationLogging.LoggerFactory))
+            {
+                sw.Restart();
+
+                var noteContent = (await x.GetNotesTimelineAsync(5)).ToList();
+                Assert.True(noteContent.Any());
+                Assert.True(sw.ElapsedMilliseconds < 10);
+
+                Debug.WriteLine("Elapsed: {0} ms", sw.ElapsedMilliseconds);
+                Debug.WriteLine("noteContent.Count()={0}", noteContent.Count());
+                foreach (var content in noteContent)
+                {
+                    Debug.WriteLine(content);
+                }
+                sw.Restart();
+
+                noteContent = (await x.GetNotesTimelineAsync(5)).ToList();
                 Assert.True(noteContent.Any());
                 Assert.True(sw.ElapsedMilliseconds < 10);
 
