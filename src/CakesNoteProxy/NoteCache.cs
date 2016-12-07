@@ -172,10 +172,8 @@ namespace CakesNoteProxy
                 await RefreshCacheAsync(ModifiedDateTimeUtc != DateTime.MinValue);
             }
 
-            using (new RwLockScope())
-            {
-                return _contents;
-            }
+            // TODO: need for some lock...
+            return _contents;
         }
 
 
