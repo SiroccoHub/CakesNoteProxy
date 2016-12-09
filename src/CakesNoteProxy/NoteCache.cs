@@ -162,7 +162,7 @@ namespace CakesNoteProxy
         /// Get all Contents
         /// </summary>
         /// <returns></returns>
-        public async Task<IEnumerable<NoteContent>> GetAllAsync()
+        public async Task<IList<NoteContent>> GetAllAsync()
         {
             _logger.LogInformation("calling GetAll()");
 
@@ -171,9 +171,10 @@ namespace CakesNoteProxy
             {
                 await RefreshCacheAsync(ModifiedDateTimeUtc != DateTime.MinValue);
             }
-
-            // TODO: need for some lock...
-            return _contents;
+            using (new RwLockScope()) //i know it's shallow...
+            {
+                return _contents.ToList();
+            }
         }
 
 
